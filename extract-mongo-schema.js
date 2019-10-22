@@ -8,6 +8,7 @@ var getSchema = function(url, opts) {
 	var collectionInfos = wait.forMethod(l, "toArray");
 	var schema = {};
 	var collections = {};
+	var idsAnalized = {};	
 
 	var findRelatedCollection = function(value, field) {
 		for(var collectionName in collections) {
@@ -31,6 +32,8 @@ var getSchema = function(url, opts) {
 		typeName = typeName.replace("]", "");
 		return typeName;
 	};
+
+	
 	
 	var getDocSchema = function(collectionName, doc, docSchema) {
 		for(var key in doc) {
@@ -43,26 +46,30 @@ var getSchema = function(url, opts) {
 			}
 			var typeName = setTypeName(doc[key]);
 
+			console.log(collectionName, key, doc[key]);
+
+			if (typeName == "function"){
+				return
+			}
+
 			if(!docSchema[key]["types"][typeName]) {
 				docSchema[key]["types"][typeName] = { frequency: 0 };
 			}
 			docSchema[key]["types"][typeName]["frequency"]++;
-
-			if(typeName == "string" && /^[23456789ABCDEFGHJKLMNPQRSTWXYZabcdefghijkmnopqrstuvwxyz]{17}$/.test(doc[key])) {
+			if(typeName == "Object" && /^[0-9a-fA-F]{24}$/.test(doc[key])) {
 				if(key == "_id") {
 					docSchema[key]["primaryKey"] = true;
 				} else {
-					// only if is not already processes
 					if(!docSchema[key]["foreignKey"] || !docSchema[key]["references"]) {
-						// only if is not ignored
 						if(!(opts.dontFollowFK["__ANY__"][key] || (opts.dontFollowFK[collectionName] && opts.dontFollowFK[collectionName][key]))) {
-							findRelatedCollection(doc[key], docSchema[key]);
+							if(!(doc[key] in idsAnalized)){		
+								findRelatedCollection(doc[key], docSchema[key]);
+								idsAnalized[doc[key]] = 0;
+							}
 						}
 					}
 				}
-			}
-
-			if(typeName == "Object") {
+			}else if(typeName == "Object") {
 				if(!docSchema[key]["types"][typeName]["structure"]) {
 					docSchema[key]["types"][typeName]["structure"] = {};
 				}
@@ -168,6 +175,8 @@ var getSchema = function(url, opts) {
 	});
 
 	collectionInfos.map(function(collectionInfo, index) {
+		idsAnalized = {};
+		console.log("analyzing", collectionInfo.name);
 		collectionData = collections[collectionInfo.name];
 		var docSchema = {};
 		schema[collectionInfo.name] = docSchema;
